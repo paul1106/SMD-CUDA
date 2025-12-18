@@ -21,16 +21,23 @@ void launch_phase2_horizontal(
     int height,
     int max_disparity
 ) {
-    // Grid: One block per row
-    // Block: One thread per disparity
-    dim3 grid(height, 1, 1);
-    dim3 block(max_disparity, 1, 1);
+    // CRITICAL FIX: Round up to multiple of 32 to ensure all warps are full
+    // This prevents undefined behavior in __shfl_down_sync when using 0xffffffff mask
+    // Example: disparity=270 -> threads=288 (9 full warps, not 8.4375 warps)
     
-    // Shared memory size: prev_L array
-    size_t shared_mem_size = max_disparity * sizeof(uint16_t);
+    int threads_per_block = ((max_disparity + 31) / 32) * 32;
+    threads_per_block = min(threads_per_block, 1024); // Still respect CUDA limit
+    
+    dim3 grid(height, 1, 1);
+    dim3 block(threads_per_block, 1, 1);
+    
+    // Shared memory size: Use padded thread count for allocation
+    // Double buffering: prev_L + next_L
+    size_t shared_mem_size = 2 * threads_per_block * sizeof(uint16_t);
     
     printf("Launching Phase 2 Horizontal Aggregation...\n");
     printf("  Grid: (%d, 1, 1), Block: (%d, 1, 1)\n", grid.x, block.x);
+    printf("  Max Disparity: %d, Threads: %d\n", max_disparity, threads_per_block);
     printf("  Shared Memory: %zu bytes per block\n", shared_mem_size);
     
     // ===== Pass 1: Left-to-Right =====

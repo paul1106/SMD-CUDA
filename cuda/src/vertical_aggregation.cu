@@ -156,9 +156,14 @@ void launch_vertical_aggregation(
         const int transposed_width = height;   // New width = original height
         const int transposed_height = width;   // New height = original width
         
+        // CRITICAL FIX: Round up to multiple of 32 for full warps
+        int threads_per_block = ((max_disparity + 31) / 32) * 32;
+        threads_per_block = min(threads_per_block, 1024);
+        
         dim3 grid(transposed_height, 1, 1);    // One block per row (W blocks)
-        dim3 block(max_disparity, 1, 1);       // One thread per disparity
-        size_t smem = max_disparity * sizeof(uint16_t);
+        dim3 block(threads_per_block, 1, 1);   // Padded thread count
+        // Double buffering: Use padded size for allocation
+        size_t smem = 2 * threads_per_block * sizeof(uint16_t);
         
         // Top-to-Bottom (forward direction in transposed space)
         aggregate_horizontal_path_kernel<1><<<grid, block, smem>>>(

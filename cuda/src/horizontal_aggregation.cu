@@ -73,7 +73,9 @@ __device__ __forceinline__ uint16_t block_min_reduce(uint16_t thread_val, int bl
  * Direction: +1 (left-to-right), -1 (right-to-left)
  * 
  * Grid: (height, 1, 1)
- * Block: (max_disparity, 1, 1)
+ * Block: (min(max_disparity, 1024), 1, 1)
+ * 
+ * Note: For max_disparity > 1024, each thread handles multiple disparities using strided access
  */
 template<int Direction>
 __global__ void aggregate_horizontal_path_kernel(
@@ -84,74 +86,89 @@ __global__ void aggregate_horizontal_path_kernel(
     int max_disparity
 ) {
     // Shared memory for previous pixel's aggregated costs
-    extern __shared__ uint16_t prev_L[];
+    // Note: blockDim.x may be > max_disparity (padded to multiple of 32)
+    extern __shared__ uint16_t smem[];
+    const int padded_size = blockDim.x;  // Actual allocated size (rounded up)
+    uint16_t* prev_L = smem;              // Buffer 0: read from here
+    uint16_t* next_L = smem + padded_size; // Buffer 1: write to here
     
     const int y = blockIdx.x; // Each block processes one row
-    const int d = threadIdx.x; // Each thread processes one disparity
+    const int num_threads = blockDim.x;
+    const int d = threadIdx.x; // May be >= max_disparity for padding threads
     
-    if (y >= height || d >= max_disparity) return;
+    if (y >= height) return;
     
     // Determine sweep direction
     const int x_start = (Direction > 0) ? 0 : (width - 1);
     const int x_end = (Direction > 0) ? width : -1;
     
+    // Thread-local minimum for reduction
+    uint16_t thread_min;
+    
     // ===== Initialization: Load first pixel's costs =====
-    {
+    // Padding threads (d >= max_disparity) set to UINT16_MAX so they don't affect min reduction
+    if (d < max_disparity) {
         const int idx = y * (width * max_disparity) + x_start * max_disparity + d;
         prev_L[d] = cost_volume[idx];
+    } else {
+        // Padding thread: Set to infinity so it's ignored in min reduction
+        prev_L[d] = UINT16_MAX;
     }
     __syncthreads();
     
     // Find initial min_prev
-    uint16_t min_prev = block_min_reduce(prev_L[d], max_disparity);
+    // ALL threads (including padding) MUST participate in block_min_reduce
+    // Padding threads already have UINT16_MAX, so they won't affect the result
+    thread_min = prev_L[d];
+    uint16_t min_prev = block_min_reduce(thread_min, num_threads);
     
-    // Accumulate first pixel (no aggregation, just raw cost)
-    // Note: No atomicAdd needed - each kernel runs separately
-    {
+    // Accumulate first pixel (only valid disparities write to global memory)
+    if (d < max_disparity) {
         const int idx = y * (width * max_disparity) + x_start * max_disparity + d;
         total_cost_volume[idx] += prev_L[d];
     }
     __syncthreads();
     
     // ===== Main Sweep: Iterate through row =====
+    // Double buffering: Read from prev_L, write to next_L, then swap
+    
     for (int x = x_start + Direction; x != x_end; x += Direction) {
-        // Load raw cost for current pixel
-        const int cost_idx = y * (width * max_disparity) + x * max_disparity + d;
-        const uint16_t raw_cost = cost_volume[cost_idx];
-        
-        // Compute 4 terms for SGM formula
-        const uint16_t term1 = prev_L[d]; // Same disparity
-        
-        // d-1 with boundary check
-        // Note: Use 255+P1 for out-of-bounds to match CPU padding logic
-        const uint16_t term2 = (d > 0) ? (prev_L[d - 1] + SGM_P1) : (255 + SGM_P1);
-        
-        // d+1 with boundary check  
-        const uint16_t term3 = (d < max_disparity - 1) ? (prev_L[d + 1] + SGM_P1) : (255 + SGM_P1);
-        
-        // Any disparity with large penalty
-        const uint16_t term4 = min_prev + SGM_P2;
-        
-        // Find minimum of 4 terms
-        uint16_t selected_min = min(term1, min(term2, min(term3, term4)));
-        
-        // Apply SGM formula with normalization
-        uint16_t new_L = raw_cost + selected_min - min_prev;
-        
-        // Clamp to prevent overflow (optional safety)
-        new_L = min(new_L, (uint16_t)UINT16_MAX);
-        
-        // Accumulate to output buffer
-        // Note: No atomicAdd needed - each direction runs separately
-        total_cost_volume[cost_idx] += new_L;
-        
-        // Update prev_L for next iteration
-        prev_L[d] = new_L;
+        // Compute new costs for valid disparities only
+        if (d < max_disparity) {
+            const int cost_idx = y * (width * max_disparity) + x * max_disparity + d;
+            const uint16_t raw_cost = cost_volume[cost_idx];
+            
+            // Read from prev_L (safe: no writes to prev_L in this phase)
+            const uint16_t term1 = prev_L[d];
+            const uint16_t term2 = (d > 0) ? (prev_L[d - 1] + SGM_P1) : (255 + SGM_P1);
+            const uint16_t term3 = (d < max_disparity - 1) ? (prev_L[d + 1] + SGM_P1) : (255 + SGM_P1);
+            const uint16_t term4 = min_prev + SGM_P2;
+            
+            uint16_t selected_min = min(term1, min(term2, min(term3, term4)));
+            uint16_t new_L = raw_cost + selected_min - min_prev;
+            new_L = min(new_L, (uint16_t)UINT16_MAX);
+            
+            // Write to global memory
+            total_cost_volume[cost_idx] += new_L;
+            
+            // Write to next_L buffer
+            next_L[d] = new_L;
+        } else {
+            // Padding thread: maintain UINT16_MAX for next reduction
+            next_L[d] = UINT16_MAX;
+        }
         
         __syncthreads();
         
+        // Swap buffers: next_L becomes prev_L for next iteration
+        uint16_t* tmp = prev_L;
+        prev_L = next_L;
+        next_L = tmp;
+        
         // Compute new min_prev for next iteration
-        min_prev = block_min_reduce(new_L, max_disparity);
+        // ALL threads (including padding) MUST participate in reduction
+        thread_min = prev_L[d];  // Padding threads have UINT16_MAX
+        min_prev = block_min_reduce(thread_min, num_threads);
         
         __syncthreads();
     }

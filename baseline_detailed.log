@@ -1,0 +1,64 @@
+Loading Views...Done!
+w = 450, h = 375, d = [0,64]
+
+SGM Initializing...
+SGM Initializing Done! Timing : 0.067000 s
+
+SGM Matching...
+computing cost! timing :	0.183000 s
+cost aggregating! timing :	0.245000 s
+computing disparities! timing :	0.015000 s
+postprocessing! timing :        0.042000 s
+
+SGM Matching...Done! Timing :   0.487000 s
+Disparity maps saved to:
+  Data/cone/im2.png.d.png
+  Data/cone/im2.png.c.png
+Loading Views...Done!
+w = 671, h = 555, d = [0,128]
+
+SGM Initializing...
+SGM Initializing Done! Timing : 0.306000 s
+
+SGM Matching...
+computing cost! timing :	0.749000 s
+cost aggregating! timing :	1.040000 s
+computing disparities! timing :	0.069000 s
+postprocessing! timing :        0.179000 s
+
+SGM Matching...Done! Timing :   2.039000 s
+Disparity maps saved to:
+  Data/Reindeer/view1.png.d.png
+  Data/Reindeer/view1.png.c.png
+Loading Views...Done!
+w = 626, h = 555, d = [0,64]
+
+SGM Initializing...
+SGM Initializing Done! Timing : 0.141000 s
+
+SGM Matching...
+computing cost! timing :	0.389000 s
+cost aggregating! timing :	0.512000 s
+computing disparities! timing :	0.033000 s
+postprocessing! timing :        0.086000 s
+
+SGM Matching...Done! Timing :   1.022000 s
+Disparity maps saved to:
+  Data/Cloth3/view1.png.d.png
+  Data/Cloth3/view1.png.c.png
+Loading Views...Done!
+w = 653, h = 555, d = [0,64]
+
+SGM Initializing...
+SGM Initializing Done! Timing : 0.146000 s
+
+SGM Matching...
+computing cost! timing :	0.355000 s
+cost aggregating! timing :	0.529000 s
+computing disparities! timing :	0.035000 s
+postprocessing! timing :        0.086000 s
+
+SGM Matching...Done! Timing :   1.008000 s
+Disparity maps saved to:
+  Data/Wood2/view1.png.d.png
+  Data/Wood2/view1.png.c.png

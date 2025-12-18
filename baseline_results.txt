@@ -1,0 +1,59 @@
+=========================================
+SGM CPU Baseline Benchmark Results
+Date: Thu Dec 18 08:03:44 UTC 2025
+=========================================
+
+----------------------------------------
+Dataset: cone
+Resolution: unknown
+Disparity Range: [0, 64]
+
+Initialization:       68.00 ms
+Cost Computation:     184.00 ms
+Cost Aggregation:     246.00 ms
+Disparity Calc:       15.00 ms
+Post-processing:      42.00 ms
+Total Matching Time:  489.00 ms
+
+----------------------------------------
+Dataset: Reindeer
+Resolution: unknown
+Disparity Range: [0, 128]
+
+Initialization:       317.00 ms
+Cost Computation:     749.00 ms
+Cost Aggregation:     1037.00 ms
+Disparity Calc:       69.00 ms
+Post-processing:      173.00 ms
+Total Matching Time:  2030.00 ms
+
+----------------------------------------
+Dataset: Cloth3
+Resolution: unknown
+Disparity Range: [0, 128]
+
+Initialization:       285.00 ms
+Cost Computation:     729.00 ms
+Cost Aggregation:     971.00 ms
+Disparity Calc:       64.00 ms
+Post-processing:      163.00 ms
+Total Matching Time:  1929.00 ms
+
+----------------------------------------
+Dataset: Wood2
+Resolution: unknown
+Disparity Range: [0, 128]
+
+Initialization:       292.00 ms
+Cost Computation:     653.00 ms
+Cost Aggregation:     1024.00 ms
+Disparity Calc:       67.00 ms
+Post-processing:      167.00 ms
+Total Matching Time:  1913.00 ms
+
+
+=========================================
+Summary
+=========================================
+All timing measurements are in milliseconds (ms)
+These results serve as CPU baseline for CUDA optimization comparison
